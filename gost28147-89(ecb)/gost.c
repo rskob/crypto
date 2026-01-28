@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define IS_LITTLE_ENDIAN *((char*)&(uint32_t){1}) == 1 
 #define KEY_PARTS 8
@@ -10,6 +11,10 @@
 #define SOURCE_FILE "text.txt"
 #define DESTINATION_FILE "result.txt"
 #define ROUNDS 32
+
+#define DEFAULT_SIZE 20
+
+uint64_t blocks = 0;
 
 const uint8_t Sbox[8][16] = {
     // RFC 4357
@@ -55,13 +60,20 @@ uint64_t read_block(FILE* fp)
     uint8_t read = fread(bytes, 1, 8, fp);
 
     if(read == 0) return 0;
+    blocks++;
     if(read < 8){
         // must add some padding (PKCS7 in this case)
         uint8_t padding_length = 8 - read;
-        for(int i = read; i < 8; i++){
+        //printf("READ: %d", read);
+
+        memcpy(bytes + padding_length, bytes, read);
+
+        for(int i = 0; i < padding_length; i++){
+            //printf("Length: %d", padding_length);
             bytes[i] = padding_length;
         }
     }
+    
 
     uint64_t block = 0;
     for(int i = 0; i < 8; i++){
@@ -102,8 +114,59 @@ uint64_t encrypt_block(uint64_t block, uint32_t* key_parts)
     return block;
 }
 
+uint64_t decrypt_block(uint64_t block, uint32_t* key_parts)
+{
+    uint32_t b_left = (uint32_t)(block >> 32);
+    uint32_t b_right = (uint32_t)block;
+
+    for(int i = 31; i >= 0; i--){
+        // 1) Get key_part
+        uint32_t b_left_before = b_right;
+        int index = !((i & 24) / 24) * (i % 8) + ((i & 24) / 24) * (7 - i % 8);
+        uint32_t kx = key_parts[index];
+
+        // 2) Addition moduloo 2^32
+        b_left_before = (uint32_t)((uint64_t)b_left_before + kx);
+        // long long int result = (long long int)b_left_before - (long long int)kx;
+        // b_left_before += (uint32_t)(((result >> 63) & 1) * UINT32_MAX);
+        
+        // 3) Substitution box
+        box_substitute(&b_left_before);
+
+        // 4) Shift
+        b_left_before = (b_left_before << 11) | (b_left_before >> 21);
+
+        // 5) Xor
+        b_left ^= b_left_before;
+
+        // 6) Exchange values
+        uint32_t temp = b_right;
+        b_right = b_left;
+        b_left = temp;
+    }
+
+    block = (uint64_t)(((uint64_t)b_left << 32) | b_right);
+    return block;
+}
+
+uint64_t read_encrypted_block(FILE* fp)
+{
+    uint64_t block = 0;
+    fscanf(fp, "%016llx", &block);
+    return block;
+}
+
+void print_block(uint64_t block)
+{
+    uint8_t byte;
+    for(int i = 0; i < 8; i++){
+        printf("%02x ", (uint8_t)(block >> (56 - i * 8)));
+    }
+}
+
 int main()
 {
+    // enctyprion
     FILE* key_fp = fopen(KEY_FILE, "r");
     if(key_fp == NULL){
         perror(KEY_FILE);
@@ -119,25 +182,55 @@ int main()
         return 1;
     }
 
-    FILE* destination_fp = fopen(DESTINATION_FILE, "wb");
+    FILE* destination_fp = fopen(DESTINATION_FILE, "w+b");
     if(destination_fp == NULL){
         perror(DESTINATION_FILE);
         return 1;
     }
 
+    printf("%s", "Original message: ");
     for(;;){
         uint64_t block = read_block(source_fp);
         if(block == 0) break;
 
+        print_block(block);
+
         block = encrypt_block(block, key_parts);
 
         fprintf(destination_fp, "%016llx", block);
-        printf("%016llx", block);
     }
 
-    free(key_parts);
     fclose(source_fp);
     fclose(destination_fp);
+
+    putchar('\n');
+    // decryption
+    FILE* encrypted_fp = fopen(DESTINATION_FILE, "rb");
+    uint64_t size = DEFAULT_SIZE, elements = 0;
+    uint64_t* decrypted_message = malloc(sizeof(uint64_t) * size);
+    printf("%s", "Encrypted message: ");
+    for(;;){
+        uint64_t block = read_encrypted_block(encrypted_fp);
+        if(block == 0) break;
+        print_block(block);
+
+        if(elements == size){
+            uint64_t* temp = realloc(decrypted_message, size * 2);
+            if(temp != NULL){
+                decrypted_message= temp;
+                size *= 2;
+                free(temp);
+            }
+        }
+        block = decrypt_block(block, key_parts);
+        decrypted_message[elements++] = block;
+    }
+    putchar('\n');
+
+    printf("%s", "Decrypted message: ");
+    for(int i = 0; i < elements; i++){
+        print_block(decrypted_message[i]);
+    }
 
     return 0;
 }
