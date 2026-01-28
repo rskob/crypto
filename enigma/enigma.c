@@ -99,6 +99,8 @@ int main()
 
         char letter3 = Rotor3.rule[((letter2 - 'a') + (Rotor3.start_position - 'a')) % ALPHABET_LENGTH];
         Rotor3.start_position = alphabet[((Rotor3.start_position - 'a') + ((i + 1) % Rotor3.frequency == 0)) % ALPHABET_LENGTH];    
+
+        printf("%c", letter3);
     }
 
     return 0;
