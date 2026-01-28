@@ -18,4 +18,5 @@
 
 Компиляция:
 gcc book.c -o book
+
 ./book
