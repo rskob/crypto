@@ -58,7 +58,7 @@ uint64_t read_block(FILE* fp)
     if(read < 8){
         // must add some padding (PKCS7 in this case)
         uint8_t padding_length = 8 - read;
-        for(int i = padding_length; i < 8; i++){
+        for(int i = read; i < 8; i++){
             bytes[i] = padding_length;
         }
     }
@@ -99,6 +99,7 @@ uint64_t encrypt_block(uint64_t block, uint32_t* key_parts)
         b_right = b_left_cpy;
     }
     block = (uint64_t)(((uint64_t)b_left << 32) | b_right);
+    return block;
 }
 
 int main()
