@@ -8,6 +8,6 @@
 gcc -o gost gost.c
 echo "Secret message!!!!" > text.txt
 # key.txt: 64 hex символа подряд (32 байта)
-echo "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff" > key.txt
+echo "5A327B91E42F68C31D964EA7F5388B2C67D149B83AFC85297E14A65DC9732BE8" > key.txt
 ./gost
 cat result.txt
