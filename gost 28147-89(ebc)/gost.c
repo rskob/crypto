@@ -219,7 +219,6 @@ int main()
             if(temp != NULL){
                 decrypted_message= temp;
                 size *= 2;
-                free(temp);
             }
         }
         block = decrypt_block(block, key_parts);
